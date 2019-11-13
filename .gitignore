@@ -1,0 +1,6 @@
+node_modules
+package-lock.json
+config.js
+config/default.json
+.vscode/
+launch.json
