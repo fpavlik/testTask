@@ -1,6 +1,8 @@
 // 'use strict'
 
-const { con } = require('../modules/connection')
+const {
+    con
+} = require('../modules/connection')
 const fs = require('fs')
 const path = require('path')
 
@@ -44,20 +46,20 @@ exports.saveImg = async (ctx) => {
         if (!ctx.request.files.img) {
             ctx.throw(404, 'Img not found')
         }
-    
+
         const type = /jpg|jpeg|png/.exec(ctx.request.files.img.type)
-    
+
         if (!type || (!type[0])) {
             ctx.throw(400, 'Format not valid')
         }
-    
+
         const pathToSave = path.join(__dirname, 'img', `${Date.now().toString()}.${type[0]}`)
-    
+
         fs.createReadStream(ctx.request.files.img.path).pipe(fs.createWriteStream(pathToSave))
-        .on('close', () => {
-            ctx.request.body.data.image = pathToSave
-            resolve(ctx)
-        })    
+            .on('close', () => {
+                ctx.request.body.data.image = pathToSave
+                resolve(ctx)
+            })
     })
 }
 
@@ -79,15 +81,21 @@ exports.updBook = async (ctx) => {
 }
 
 exports.getBooks = async (ctx) => {
-    for (const key in ctx.query) {
-        if (ctx.query.hasOwnProperty(key)) {
-            const element = ctx.query[key];
-            console.log("TCL: exports.getBooks -> element", element)
-            
-        } else {
-            console.log('Ha')
+    const q = {
+        title: ctx.query.title ? ctx.query.title : null,
+        date: ctx.query.date ? ctx.query.date : null,
+        description: ctx.query.description ? ctx.query.description : null,
+        author: ctx.query.author ? ctx.query.author : null,
+        offset: ctx.query.offset ? ctx.query.offset : null,
+        limit: ctx.query.limit ? ctx.query.limit : null
+    }
+
+    for (const key in q) {
+        if (q.hasOwnProperty(key)) {
+            const element = q[key]
         }
     }
+
 }
 
 // // const mongoose = require('mongoose')
