@@ -4,3 +4,4 @@ config.js
 config/default.json
 .vscode/
 launch.json
+books/img/*
