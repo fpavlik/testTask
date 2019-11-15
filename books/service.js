@@ -81,280 +81,135 @@ exports.updBook = async (ctx) => {
 }
 
 exports.getBooks = async (ctx) => {
-    const q = {
-        title: ctx.query.title ? ctx.query.title : null,
-        date: ctx.query.date ? ctx.query.date : null,
-        description: ctx.query.description ? ctx.query.description : null,
-        author: ctx.query.author ? ctx.query.author : null,
-        offset: ctx.query.offset ? ctx.query.offset : null,
-        limit: ctx.query.limit ? ctx.query.limit : null
-    }
-
-    for (const key in q) {
-        if (q.hasOwnProperty(key)) {
-            const element = q[key]
+    return new Promise((resolve, reject) => {
+        //lets create my own query builder!!!
+        const q = {
+            title: ctx.query.title ? ctx.query.title : null,
+            date: ctx.query.date ? ctx.query.date : null,
+            description: ctx.query.description ? ctx.query.description : null,
+            author: ctx.query.author ? ctx.query.author : null,
+            offset: ctx.query.offset ? ctx.query.offset : null,
+            limit: ctx.query.limit ? ctx.query.limit : null
         }
-    }
+    
+        // Some words about that `q`. q - means `query`, i've done it becouse there is some
+        // troubles with iterations in forin cycle with object `ctx.query`
+    
+        let sql = `SELECT books.id as book_id, title, date, authors.author_name, description, image 
+        FROM books
+        INNER JOIN authors
+        on books.author_id`
+        let groupCount = 0
+        let orderCount = 0
+        if (q.title || q.date || q.description || q.author || q.offset || q.limit) {
+            for (const key in q) {
+                if (q.hasOwnProperty(key)) {
+                    const el = q[key]
+                    if (!el) continue
+                    if (key.toUpperCase() == 'LIMIT' && el) {
+                        sql = sql + `\n LIMIT ${el} `
+                    } else if (key.toUpperCase() == 'OFFSET' && el) {
+                        sql = sql + `\n OFFSET ${el} `
+                    } else {
+                        if (el.toUpperCase() == 'GROUP') {
+                            if (groupCount === 0) {
+                                sql = (key.toUpperCase() == 'AUTHOR') ? sql + `\n GROUP BY author_name` : sql + `\n GROUP BY ${key} `
+                            } else {
+                                sql = (key.toUpperCase() == 'AUTHOR') ? pasteString('GROUP BY', sql, ` author_name,`) : pasteString('GROUP BY', sql, ` ${key},`)
+                            }
+                            groupCount++
+                        } else {
+                            if (orderCount === 0) {
+                                sql = (key.toUpperCase() == 'AUTHOR') ? sql + `\n ORDER BY author_name ${el.toUpperCase()}` : sql + `\n ORDER BY ${key} ${el.toUpperCase()} `
+                            } else {
+                                sql = (key.toUpperCase() == 'AUTHOR') ? pasteString('ORDER BY', sql, ` author_name ${el.toUpperCase()},`) : pasteString('ORDER BY', sql, ` ${key} ${el.toUpperCase()},`)
+                            }
+                            orderCount++
+                        }
+                    }
+                }
+            }
+        }
 
+        sql = validateSQL(sql)
+        con.query(sql, (err, result) => {
+            if (err) ctx.throw(400, `Failed to update book \n ${err}`)
+            resolve(result)
+        })
+    })
 }
 
-// // const mongoose = require('mongoose')
-// const { Post, Favorite } = require('./model')
-// const { Feed } = require('../feeds/model')
-// const mainUrl = require('config').get('mainUrl')
-// const PROJECT = {
-//     type: 1,
-//     title: 1,
-//     photo: 1,
-//     lead: 1,
-//     lettersCount: 1,
-//     html: 1,
-//     author: 1,
-//     tags: 1,
-//     date: { $convert: { input: "$date", to: "long" } },
-//     'url': { $concat: [mainUrl, "$url"] },
-//     rubric: { $arrayElemAt: ["$rubric", 0] }
-// }
-// const LOOKUP = [{
-//     $lookup:
-//         {
-//             from: 'tags',
-//             localField: 'tags',
-//             foreignField: '_id',
-//             as: 'tags'
-//         }
-// }, {
-//     $lookup:
-//         {
-//             from: 'rubrics',
-//             localField: 'rubric',
-//             foreignField: '_id',
-//             as: 'rubric'
-//         }
-// }]
+function pasteString (word, string, sub) {
+    let pos = string.indexOf(word)
+    let begin = string.slice(0, pos + word.length)
+    let end = string.substring(pos + word.length, string.length)
+    return begin + sub + end
+}
 
-// async function getPostByID (postID) {
-//     try {
-//         let post = await Post.aggregate().match({ '_id': mongoose.Types.ObjectId(postID) })
-//             .lookup({
-//                 from: 'tags',
-//                 localField: 'tags',
-//                 foreignField: '_id',
-//                 as: 'tags'
-//             }).lookup({
-//                 from: 'rubrics',
-//                 localField: 'rubric',
-//                 foreignField: '_id',
-//                 as: 'rubric'
-//             }).project(PROJECT)
-
-//         return post.length > 0 ? post[0] : null
-//     } catch (e) {
-//         console.log(e)
-//         return null
-//     }
-// }
-
-// function getDailyPosts (count, skip) {
-//     return Post.aggregate([
-//         { $match: { mainRejected: false, published: true } },
-//         ...getByDayAggregate(count, skip, true),
-//         ...LOOKUP,
-//         {
-//             $project: PROJECT
-//         }
-//     ])
-// }
-
-// async function getSuggests (count, skip, postId) {
-//     const post = await Post.findOne({ '_id': postId })
-//     return post ? Post.aggregate().match({ '_id': { $in: post.suggests }, published: true }).lookup({
-//         from: 'tags',
-//         localField: 'tags',
-//         foreignField: '_id',
-//         as: 'tags'
-//     }).lookup({
-//         from: 'rubrics',
-//         localField: 'rubric',
-//         foreignField: '_id',
-//         as: 'rubric'
-//     }).skip(parseInt(skip)).limit(parseInt(count)).project(PROJECT) : []
-// }
-
-// async function getFavorites (userId, count, skip) {
-//     return Favorite.aggregate([
-//         { $match: { 'userId': mongoose.Types.ObjectId(userId) } },
-//         {
-//             $lookup:
-//                 {
-//                     from: 'posts',
-//                     localField: 'postId',
-//                     foreignField: '_id',
-//                     as: 'post'
-//                 }
-//         },
-//         { $unwind: '$post' },
-//         { $replaceRoot: { newRoot: "$post" } },
-//         { $match: { published: true } },
-//         {
-//             $lookup:
-//                 {
-//                     from: 'tags',
-//                     localField: 'tags',
-//                     foreignField: '_id',
-//                     as: 'tags'
-//                 }
-//         }, {
-//             $lookup:
-//                 {
-//                     from: 'rubrics',
-//                     localField: 'rubric',
-//                     foreignField: '_id',
-//                     as: 'rubric'
-//                 }
-//         }
-//     ]).skip(parseInt(skip)).limit(parseInt(count)).project(PROJECT)
-// }
-
-// async function addFavorites (userId, postId) {
-//     const existFavorite = await Favorite.findOne({ userId, postId })
-//     if (!existFavorite) {
-//         const favorite = new Favorite({ userId, postId })
-//         return favorite.save()
-//     }
-// }
-
-// async function deleteFavorites (userId, postId) {
-//     return Favorite.deleteOne({ userId, postId })
-// }
-
-// async function getPostsByRubricId (rubricId, count, skip) {
-//     return Post.aggregate([
-//         { $match: { rubric: mongoose.Types.ObjectId(rubricId) } },
-//         ...getByDayAggregate(count, skip, false),
-//         ...LOOKUP,
-//         { $project: PROJECT }
-//     ])
-// }
-
-// async function getAnalog (count, skip, postId) {
-//     const post = await Post.findOne({ '_id': postId })
-//     if (!post) {
-//         return []
-//     }
-//     const partCount = Math.floor(count / 2)
-//     const partSkip = Math.floor(skip / 2)
-//     const result = []
-//     const byRubrics = await getPostsByMatch({
-//         date: { $lt: new Date(post.date) },
-//         rubric: post.rubric
-//     }, partSkip, partCount)
-//     const byTags = await getPostsByMatch({
-//         date: { $lt: new Date(post.date) },
-//         tags: { $in: post.tags }
-//     }, partSkip, partCount)
-
-//     for (let i = 0; i < partCount; i++) {
-//         if (byRubrics[i]) {
-//             result.push(byRubrics[i])
-//         }
-//         if (byTags[i]) {
-//             result.push(byTags[i])
-//         }
-//     }
-
-//     return result
-// }
-
-// async function getPersonal (count, skip, userId) {
-//     const feeds = await Feed.findOne({ userId })
-//     if (!feeds) {
-//         return []
-//     }
-
-//     return getPostsByMatch({ tags: { $in: feeds.tags } }, parseInt(skip), parseInt(count))
-// }
-
-// async function getPersonalByDay (count, skip, userId) {
-//     const feeds = await Feed.findOne({ userId })
-//     if (!feeds) {
-//         return []
-//     }
-
-//     const date = new Date()
-//     date.setDate(date.getDate() - 1)
-
-//     return getPostsByMatch({
-//         tags: { $in: feeds.tags },
-//         date: { $gte: date, $lte: new Date }
-//     }, parseInt(skip), parseInt(count))
-// }
-
-// async function search (count, skip, match) {
-//     return getPostsByMatch({ '$text': { '$search': match } }, parseInt(skip), parseInt(count),
-//         { $sort: { score: { $meta: "textScore" } } })
-// }
-
-// async function getDailyPostsByDay () {
-//     const date = new Date()
-//     date.setDate(date.getDate() - 1)
-//     return Post.aggregate([
-//         { $match: { mainRejected: false, published: true, date: { $gte: date, $lte: new Date } } },
-//         ...getByDayAggregate(40, 0, true),
-//         ...LOOKUP,
-//         {
-//             $project: PROJECT
-//         }
-//     ])
-// }
-
-// function getByDayAggregate (count, skip, main = true) {
-//     return [{ $sort: { created: -1 } },
-//         { $skip: parseInt(skip) },
-//         { $limit: parseInt(count) },
-//         { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$date" } }, posts: { $push: "$$ROOT" } } },
-//         { $sort: { _id: -1 } },
-//         { $unwind: '$posts' },
-//         { $replaceRoot: { newRoot: "$posts" } },
-//         { $sort: { hotBlock: -1, hotNews: -1, [main ? 'positionMain' : 'positionRubrics']: -1 } }]
-// }
-
-// function getPostsByMatch (match, skip, limit, additional = { $match: {} }) {
-//     return Post.aggregate([
-//         { $match: match },
-//         { $match: { published: true } },
-//         {
-//             $lookup:
-//                 {
-//                     from: 'tags',
-//                     localField: 'tags',
-//                     foreignField: '_id',
-//                     as: 'tags'
-//                 }
-//         }, {
-//             $lookup:
-//                 {
-//                     from: 'rubrics',
-//                     localField: 'rubric',
-//                     foreignField: '_id',
-//                     as: 'rubric'
-//                 }
-//         },
-//         additional
-//     ]).skip(skip).limit(limit).project(PROJECT)
-// }
-
-// exports.service = {
-//     getPostByID,
-//     getDailyPosts,
-//     getSuggests,
-//     getFavorites,
-//     addFavorites,
-//     getAnalog,
-//     getPersonal,
-//     deleteFavorites,
-//     getDailyPostsByDay,
-//     getPersonalByDay,
-//     getPostsByRubricId,
-//     search
-// }
+function validateSQL(sql) {
+    if (sql.includes('GROUP BY') && sql.includes('ORDER BY')) {
+        let orderPos = sql.indexOf('ORDER BY')
+        let groupPos = sql.indexOf('GROUP BY')
+        if (groupPos > orderPos) {
+            let begin = sql.slice(0, orderPos)
+            let order = sql.slice(orderPos, groupPos)
+            if (sql.includes('OFFSET') && sql.includes('LIMIT')) {
+                let limitPos = sql.indexOf('LIMIT')
+                let offsetPos = sql.indexOf('OFFSET')
+                if (limitPos > offsetPos) {
+                    let group = sql.slice(groupPos, offsetPos)
+                    let offset = sql.slice(offsetPos, limitPos)
+                    let limit = sql.substring(limitPos, sql.length)
+                    return begin + group + order + limit + offset
+                } else {
+                    let group = sql.slice(groupPos, limitPos)
+                    let end = sql.substring(limitPos, sql.length)
+                    return begin + group + order + end
+                }
+            } else if (sql.includes('OFFSET')) {
+                let offsetPos = sql.indexOf('OFFSET')
+                let group = sql.slice(groupPos, offsetPos)
+                let end = sql.substring(offsetPos, sql.length)
+                return begin + group + order + end
+            } else if (sql.includes('LIMIT')) {
+                let limitPos = sql.indexOf('LIMIT')
+                let group = sql.slice(groupPos, limitPos)
+                let end = sql.substring(limitPos, sql.length)
+                return begin + group + order + end
+            } else {
+                let group = sql.substring(groupPos, sql.length)
+                return begin + group + order
+            }
+        } else {
+            if (sql.includes('OFFSET') && sql.includes('LIMIT')) {
+                let limitPos = sql.indexOf('LIMIT')
+                let offsetPos = sql.indexOf('OFFSET')
+                if (limitPos > offsetPos) {
+                    let begin = sql.slice(0, offsetPos)
+                    let offset = sql.slice(offsetPos, limitPos)
+                    let limit = sql.substring(limitPos, sql.length)
+                    return begin + limit + offset
+                } else {
+                    return sql
+                }
+            } else {
+                return sql
+            }
+        }
+    } else {
+        if (sql.includes('OFFSET') && sql.includes('LIMIT')) {
+            let limitPos = sql.indexOf('LIMIT')
+            let offsetPos = sql.indexOf('OFFSET')
+            if (limitPos > offsetPos) {
+                let begin = sql.slice(0, offsetPos)
+                let offset = sql.slice(offsetPos, limitPos)
+                let limit = sql.substring(limitPos, sql.length)
+                return begin + limit + offset
+            } else {
+                return sql
+            }
+        } else {
+            return sql
+        }
+    }
+}
